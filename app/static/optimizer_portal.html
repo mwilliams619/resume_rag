@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resume Optimizer</title>
+    <style>
+        #drop-area {
+            border: 2px dashed #ccc;
+            border-radius: 20px;
+            width: 300px;
+            height: 200px;
+            font-family: sans-serif;
+            margin: 50px auto;
+            padding: 20px;
+            text-align: center;
+        }
+        #drop-area.highlight {
+            border-color: purple;
+        }
+        #fileElem {
+            display: none;
+        }
+        #status-messages {
+            margin: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+        }
+        #optimization-results {
+            margin: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            display: none;
+        }
+        .loading {
+            display: none;
+            margin: 20px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="status-messages">Status: Ready</div>
+    
+    <div id="drop-area">
+        <form class="my-form">
+            <p>Upload your resume by dragging and dropping it here or</p>
+            <input type="file" id="fileElem" accept="application/pdf" onchange="handleFiles(this.files)">
+            <label class="button" for="fileElem">Select a file</label>
+        </form>
+    </div>
+    <div>
+        <textarea id="job-description" rows="10" cols="50" placeholder="Enter job description here..."></textarea>
+    </div>
+    <button onclick="submitData()" id="submit-btn">Submit</button>
+    
+    <div class="loading" id="loading-indicator">
+        Processing... Please wait...
+    </div>
+    
+    <div id="optimization-results"></div>
+
+    <script>
+        let dropArea = document.getElementById('drop-area');
+        let resumeUploaded = false;
+        let jobDescriptionProcessed = false;
+
+        function updateStatus(message, isError = false) {
+            const statusDiv = document.getElementById('status-messages');
+            statusDiv.style.color = isError ? 'red' : 'green';
+            statusDiv.textContent = `Status: ${message}`;
+        }
+
+        function showLoading(show = true) {
+            document.getElementById('loading-indicator').style.display = show ? 'block' : 'none';
+            document.getElementById('submit-btn').disabled = show;
+        }
+
+        function displayResults(results) {
+            const resultsDiv = document.getElementById('optimization-results');
+            resultsDiv.style.display = 'block';
+            resultsDiv.innerHTML = `
+                <h3>Optimization Results:</h3>
+                <div>${results.replace(/\n/g, '<br>')}</div>
+            `;
+        }
+
+        // Your existing event listeners...
+
+        async function handleFiles(files) {
+            let file = files[0];
+            let formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                updateStatus('Uploading resume...');
+                const response = await fetch('http://localhost:8000/api/v1/upload-resume', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const data = await response.json();
+                
+                console.log('Resume upload success:', data);
+                updateStatus('Resume uploaded successfully!');
+                resumeUploaded = true;
+            } catch (error) {
+                console.error('Error:', error);
+                updateStatus(`Error uploading resume: ${error.message}`, true);
+                resumeUploaded = false;
+            }
+        }
+
+        async function submitData() {
+            if (!resumeUploaded) {
+                updateStatus('Please upload a resume first!', true);
+                return;
+            }
+
+            const jobDescription = document.getElementById('job-description').value;
+            if (!jobDescription.trim()) {
+                updateStatus('Please enter a job description!', true);
+                return;
+            }
+
+            showLoading(true);
+            
+            try {
+                // Submit job description
+                updateStatus('Processing job description...');
+                const jobResponse = await fetch('http://localhost:8000/api/v1/add-job-description', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ text: jobDescription })
+                });
+
+                if (!jobResponse.ok) throw new Error(`HTTP error! status: ${jobResponse.status}`);
+                await jobResponse.json();
+                
+                // Run optimization
+                updateStatus('Optimizing resume...');
+                const optimizeResponse = await fetch('http://localhost:8000/api/v1/optimize', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ 
+                        query: "Based on the provided resume and job description, please provide specific recommendations for rephrasing bullet points of the resume. Give explanations for each update. Include metrics, industry key words and use Situation, Task, Action, Result structure whenever possible.\
+                        Always be VERY CONCISE. Omit needless words. Vigorous writing is concise. A sentence should contain no unnecessary words, a paragraph no unnecessary sentences, for the same reason that a drawing should have no unnecessary lines and a machine no unnecessary parts.\
+                        Keep responses unique and free of repetition."  
+                    })
+                });
+
+                if (!optimizeResponse.ok) throw new Error(`HTTP error! status: ${optimizeResponse.status}`);
+                const optimizationResults = await optimizeResponse.json();
+                
+                displayResults(optimizationResults.response);
+                updateStatus('Optimization complete!');
+            } catch (error) {
+                console.error('Error:', error);
+                updateStatus(`Error: ${error.message}`, true);
+            } finally {
+                showLoading(false);
+            }
+        }
+    </script>
+</body>
+</html>

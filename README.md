@@ -26,7 +26,7 @@ resume_rag
 ├── Dockerfile                           # Docker image instructions
 └── README.md                            # Project documentation
 ```
-```
+
 
 ## Setup Instructions
 
